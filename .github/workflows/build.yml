@@ -1,0 +1,51 @@
+name: Build Tokenlock APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip project if it was uploaded as tokenlock.zip
+        run: |
+          if [ -f tokenlock.zip ]; then
+            unzip -o -q tokenlock.zip -d src_unzipped
+          fi
+
+      - name: Find the project folder
+        id: find
+        run: |
+          DIR=$(dirname "$(find . -name settings.gradle | head -n 1)")
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build APK
+        working-directory: ${{ steps.find.outputs.dir }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/Tokenlock.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tokenlock-apk
+          path: Tokenlock.apk
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "build-${{ github.run_number }}" Tokenlock.apk \
+            --title "Tokenlock build ${{ github.run_number }}" \
+            --notes "Download Tokenlock.apk below to install."
